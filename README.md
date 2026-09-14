@@ -1,3 +1,6 @@
+<img width="1800" height="931" alt="image" src="https://github.com/user-attachments/assets/641e90fc-c915-4edb-bda5-1c6adf2e9d4d" />
+
+
 # System Integration - Modular Monolith
 
 New activity project: Spring Boot + React + Supabase.
