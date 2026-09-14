@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 
 const products = [
   { id: 'P100', name: 'Wireless Mouse', stock: 25 },
@@ -78,10 +78,10 @@ function App() {
         </form>
 
         {result && (
-          <section className={`result ${result.status.toLowerCase()}`}>
+          <section className={`result ${(result?.status ?? 'ERROR').toString().toLowerCase()}`}>
             <div className="result-header">
               <span>Result</span>
-              <strong>{result.status}</strong>
+              <strong>{result?.status ?? 'ERROR'}</strong>
             </div>
 
             <p>{result.reason}</p>
