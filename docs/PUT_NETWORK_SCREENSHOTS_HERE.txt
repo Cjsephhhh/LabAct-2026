@@ -1,1 +1,0 @@
-Add confirmed-network.png and rejected-network.png here after testing.

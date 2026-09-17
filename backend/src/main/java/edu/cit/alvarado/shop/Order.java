@@ -1,68 +1,14 @@
 package edu.cit.alvarado.shop;
-
-import java.time.OffsetDateTime;
-
-import jakarta.persistence.*;
-
-@Entity
-@Table(name = "orders")
-public class Order {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "order_id")
-    private Long orderId;
-
-    @Column(name = "product_id")
-    private String productId;
-
-    private int quantity;
-    private String status;
-    private String reason;
-
-    @Column(name = "created_at")
-    private OffsetDateTime createdAt;
-
-    public Order() {
-    }
-
-    public Long getOrderId() {
-        return orderId;
-    }
-
-    public String getProductId() {
-        return productId;
-    }
-
-    public void setProductId(String productId) {
-        this.productId = productId;
-    }
-
-    public int getQuantity() {
-        return quantity;
-    }
-
-    public void setQuantity(int quantity) {
-        this.quantity = quantity;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public String getReason() {
-        return reason;
-    }
-
-    public void setReason(String reason) {
-        this.reason = reason;
-    }
-
-    public OffsetDateTime getCreatedAt() {
-        return createdAt;
-    }
+import java.time.OffsetDateTime; import java.util.*; import jakarta.persistence.*;
+@Entity @Table(name="orders") public class Order {
+ @Id @GeneratedValue(strategy=GenerationType.IDENTITY) @Column(name="order_id") private Long orderId;
+ @Column(nullable=false,length=20) private String status; @Column(length=255) private String reason;
+ @Column(name="created_at",nullable=false) private OffsetDateTime createdAt;
+ @OneToMany(mappedBy="order",cascade=CascadeType.ALL,orphanRemoval=true) private List<OrderItem> items=new ArrayList<>();
+ public Order(){createdAt=OffsetDateTime.now();} public Order(String status,String reason){this();this.status=status;this.reason=reason;}
+ public void addItem(OrderItem item){items.add(item);item.setOrder(this);} public Long getOrderId(){return orderId;} public String getStatus(){return status;} public void setStatus(String s){status=s;} public String getReason(){return reason;} public OffsetDateTime getCreatedAt(){return createdAt;} public List<OrderItem> getItems(){return items;}
+ public void setReason(String reason) {
+    this.reason = reason;
 }
+}
+

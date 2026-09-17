@@ -1,104 +1,18 @@
-import React, { useState } from 'react';
-
-const products = [
-  { id: 'P100', name: 'Wireless Mouse', stock: 25 },
-  { id: 'P200', name: 'Mechanical Keyboard', stock: 10 },
-  { id: 'P300', name: 'USB-C Hub', stock: 0 }
-];
-
-function App() {
-  const [productId, setProductId] = useState('P100');
-  const [quantity, setQuantity] = useState(1);
-  const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(false);
-
-  async function placeOrder(event) {
-    event.preventDefault();
-    setLoading(true);
-    setResult(null);
-
-    try {
-      const response = await fetch('http://localhost:8080/api/orders', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          productId,
-          quantity: Number(quantity)
-        })
-      });
-
-      const data = await response.json();
-      setResult(data);
-    } catch (error) {
-      setResult({
-        status: 'ERROR',
-        reason: 'Could not connect to the Spring Boot backend.',
-        inventory: null
-      });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <main className="page">
-      <section className="card">
-        <p className="eyebrow">SYSTEM INTEGRATION LAB</p>
-        <h1>Order & Inventory</h1>
-        <p className="subtitle">
-          Modular monolith using Spring Boot, React, and Supabase.
-        </p>
-
-        <form onSubmit={placeOrder}>
-          <label>Product</label>
-          <select
-            value={productId}
-            onChange={(e) => setProductId(e.target.value)}
-          >
-            {products.map((product) => (
-              <option key={product.id} value={product.id}>
-                {product.id} — {product.name}
-              </option>
-            ))}
-          </select>
-
-          <label>Quantity</label>
-          <input
-            type="number"
-            min="1"
-            value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
-          />
-
-          <button type="submit" disabled={loading}>
-            {loading ? 'Placing Order...' : 'Place Order'}
-          </button>
-        </form>
-
-        {result && (
-          <section className={`result ${(result?.status ?? 'ERROR').toString().toLowerCase()}`}>
-            <div className="result-header">
-              <span>Result</span>
-              <strong>{result?.status ?? 'ERROR'}</strong>
-            </div>
-
-            <p>{result.reason}</p>
-
-            {result.inventory && (
-              <div className="inventory">
-                <span>
-                  {result.inventory.productId} — {result.inventory.name}
-                </span>
-                <strong>Stock: {result.inventory.stock}</strong>
-              </div>
-            )}
-          </section>
-        )}
-      </section>
-    </main>
-  );
+import React,{useEffect,useState} from 'react';
+const API='http://localhost:8080/api';
+function App(){
+ const [inventory,setInventory]=useState([]),[orders,setOrders]=useState([]),[notifications,setNotifications]=useState([]),[items,setItems]=useState([{productId:'P100',quantity:1}]),[result,setResult]=useState(null),[loading,setLoading]=useState(false);
+ async function loadAll(){const [a,b,c]=await Promise.all([fetch(`${API}/inventory`),fetch(`${API}/orders`),fetch(`${API}/notifications`)]);setInventory(await a.json());setOrders(await b.json());setNotifications(await c.json());}
+ useEffect(()=>{loadAll().catch(()=>{});},[]);
+ function updateItem(index,field,value){setItems(cur=>cur.map((x,i)=>i===index?{...x,[field]:field==='quantity'?Number(value):value}:x));}
+ function addItem(){setItems(cur=>[...cur,{productId:'P100',quantity:1}]);}
+ function removeItem(index){setItems(cur=>cur.filter((_,i)=>i!==index));}
+ async function placeOrder(e){e.preventDefault();setLoading(true);setResult(null);try{const r=await fetch(`${API}/orders`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items})});const d=await r.json();setResult({httpStatus:r.status,...d});await loadAll();}catch{setResult({httpStatus:0,status:'ERROR',reason:'Could not connect to Spring Boot backend.'});}finally{setLoading(false);}}
+ async function cancelOrder(id){try{const r=await fetch(`${API}/orders/${id}/cancel`,{method:'POST'});const d=await r.json();setResult({httpStatus:r.status,...d});await loadAll();}catch{setResult({status:'ERROR',reason:'Could not connect to Spring Boot backend.'});}}
+ return <main className="page"><header><p className="eyebrow">SYSTEM INTEGRATION LAB</p><h1>Extending the Modular Monolith</h1><p className="subtitle">Multi-item orders, rollback, cancellation, inventory, events, and notifications.</p></header>
+ <section className="grid"><section className="card"><h2>Place Multi-Item Order</h2><form onSubmit={placeOrder}>{items.map((item,index)=><div className="item-row" key={index}><select value={item.productId} onChange={e=>updateItem(index,'productId',e.target.value)}>{inventory.map(p=><option key={p.productId} value={p.productId}>{p.productId} — {p.name} (stock {p.stock})</option>)}</select><input type="number" min="1" value={item.quantity} onChange={e=>updateItem(index,'quantity',e.target.value)}/>{items.length>1&&<button type="button" className="secondary" onClick={()=>removeItem(index)}>Remove</button>}</div>)}<div className="actions"><button type="button" className="secondary" onClick={addItem}>+ Add product</button><button type="submit" disabled={loading||!items.length}>{loading?'Placing...':'Place Order'}</button></div></form>{result&&<section className={`result ${(result.status??'ERROR').toString().toLowerCase()}`}><div className="result-header"><span>HTTP {result.httpStatus??'-'}</span><strong>{result.status??'ERROR'}</strong></div><p>{result.reason}</p>{result.items?.map((i,n)=><div className="line" key={n}>{i.productId} × {i.quantity} — {i.outcome}</div>)}</section>}</section>
+ <section className="card"><div className="section-title"><h2>Inventory</h2><button className="secondary" onClick={()=>loadAll()}>Refresh</button></div>{inventory.map(p=><div className="inventory-row" key={p.productId}><span><b>{p.productId}</b> — {p.name}</span><strong>{p.stock}</strong></div>)}</section></section>
+ <section className="card"><div className="section-title"><h2>Order History</h2><button className="secondary" onClick={()=>loadAll()}>Refresh</button></div>{orders.length===0&&<p>No orders yet.</p>}{orders.map(o=><div className="order-row" key={o.orderId}><div><strong>Order #{o.orderId}</strong><span className={`badge ${o.status.toLowerCase()}`}>{o.status}</span><p>{o.reason}</p><small>{o.items?.map(i=>`${i.productId} × ${i.quantity}`).join(', ')}</small></div>{o.status==='CONFIRMED'&&<button className="danger" onClick={()=>cancelOrder(o.orderId)}>Cancel</button>}</div>)}</section>
+ <section className="card"><div className="section-title"><h2>Notifications</h2><button className="secondary" onClick={()=>loadAll()}>Refresh</button></div>{notifications.length===0&&<p>No notifications yet.</p>}{notifications.map(n=><div className="notification" key={n.notificationId}><strong>{n.message}</strong><small>{new Date(n.createdAt).toLocaleString()}</small></div>)}</section></main>;
 }
-
 export default App;

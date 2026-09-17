@@ -1,0 +1,3 @@
+package edu.cit.alvarado.notification;
+import java.time.OffsetDateTime; import jakarta.persistence.*;
+@Entity @Table(name="notifications") public class Notification { @Id @GeneratedValue(strategy=GenerationType.IDENTITY) @Column(name="notification_id") private Long notificationId; @Column(nullable=false,length=255) private String message; @Column(name="created_at",nullable=false) private OffsetDateTime createdAt; public Notification(){createdAt=OffsetDateTime.now();} public Notification(String m){this();message=m;} public Long getNotificationId(){return notificationId;} public String getMessage(){return message;} public OffsetDateTime getCreatedAt(){return createdAt;} }
