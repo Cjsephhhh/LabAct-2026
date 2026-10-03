@@ -51,9 +51,9 @@ The Tiangge client uses `TIANGGE_CLIENT_ID` and `TIANGGE_API_KEY` if they are se
 
 ## Database
 
-Run `supabase.sql` in the Supabase SQL Editor. It creates the inventory/order tables, supplier order tracking, and the Tiangge cursor, processed-event, and order-link tables.
+If your Supabase database already contains the Lab 3/Lab 2 tables and data, run `lab4-migration.sql`. It adds the `BACKORDERED` status and the Tiangge cursor, processed-event, pending-stock, and order-link tables without resetting your existing orders.
 
-If you already have the Lab 3 supplier tables in Supabase, keep the existing data and make sure the new Tiangge tables and `BACKORDERED` order status are added.
+For a completely fresh database, `supabase.sql` contains the full Lab 4 schema and seed inventory.
 
 ## Run
 
