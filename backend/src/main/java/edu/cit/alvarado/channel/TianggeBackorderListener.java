@@ -4,6 +4,7 @@ import edu.cit.alvarado.shop.OrderResponse;
 import edu.cit.alvarado.shop.OrderService;
 import edu.cit.alvarado.supplier.SupplierOrderDeliveredEvent;
 import org.springframework.core.annotation.Order;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -25,6 +26,15 @@ final class TianggeBackorderListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Order(10)
     void deliveryArrived(SupplierOrderDeliveredEvent event) {
+        resolveOpenBackorders();
+    }
+
+    @Scheduled(fixedDelay = 10000)
+    void retryOpenBackorders() {
+        resolveOpenBackorders();
+    }
+
+    private void resolveOpenBackorders() {
         for (TianggeOrderLink link : links.findByDecision("BACKORDERED")) {
             TianggeOrderContext.begin();
             try {
