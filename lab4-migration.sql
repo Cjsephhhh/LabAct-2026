@@ -26,6 +26,9 @@ CREATE TABLE IF NOT EXISTS tiangge_order_links (
     restocked boolean NOT NULL DEFAULT false
 );
 
+ALTER TABLE tiangge_order_links
+    ADD COLUMN IF NOT EXISTS restocked boolean NOT NULL DEFAULT false;
+
 INSERT INTO tiangge_state(id, cursor)
 VALUES (1, 0)
 ON CONFLICT (id) DO NOTHING;
