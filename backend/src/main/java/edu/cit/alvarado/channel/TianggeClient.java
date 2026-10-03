@@ -3,6 +3,7 @@ package edu.cit.alvarado.channel;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.net.http.HttpClient;
@@ -23,10 +24,7 @@ final class TianggeClient implements MarketplaceGateway {
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
         requestFactory.setReadTimeout(Duration.ofSeconds(5));
 
-        String baseUrl = System.getenv().getOrDefault(
-                "TIANGGE_BASE_URL",
-                "https://legacysupply.onrender.com/tiangge/v1"
-        );
+        String baseUrl = System.getenv().getOrDefault("TIANGGE_BASE_URL", "https://legacysupply.onrender.com/tiangge/v1");
         String clientId = required("TIANGGE_CLIENT_ID", "LS_CLIENT_ID");
         String apiKey = required("TIANGGE_API_KEY", "LS_API_KEY");
 
@@ -87,14 +85,16 @@ final class TianggeClient implements MarketplaceGateway {
     }
 
     private <T> T retry(Supplier<T> action) {
-        RestClientResponseException last = null;
+        RuntimeException last = null;
         for (int attempt = 1; attempt <= 3; attempt++) {
             try {
                 return action.get();
-            } catch (RestClientResponseException ex) {
+            } catch (RestClientException ex) {
+                if (ex instanceof RestClientResponseException response) {
+                    int status = response.getStatusCode().value();
+                    if (status != 503 && status != 429) throw ex;
+                }
                 last = ex;
-                int status = ex.getStatusCode().value();
-                if (status != 503 && status != 429) throw ex;
                 try {
                     Thread.sleep(attempt * 300L);
                 } catch (InterruptedException e) {
