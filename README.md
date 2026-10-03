@@ -40,9 +40,9 @@ The Order and Inventory modules do not know that Tiangge exists. Tiangge orders 
 Do not commit the API key or database password.
 
 ```powershell
-$env:SUPABASE_DB_URL="jdbc:postgresql://YOUR_POOLER_HOST:5432/postgres?sslmode=require"
-$env:SUPABASE_DB_USERNAME="postgres.YOUR_PROJECT_REF"
-$env:SUPABASE_DB_PASSWORD="YOUR_DATABASE_PASSWORD"
+$env:SPRING_DATASOURCE_URL="jdbc:postgresql://YOUR_POOLER_HOST:5432/postgres?sslmode=require"
+$env:SPRING_DATASOURCE_USERNAME="postgres.YOUR_PROJECT_REF"
+$env:SPRING_DATASOURCE_PASSWORD="YOUR_DATABASE_PASSWORD"
 $env:LS_CLIENT_ID="YOUR_STUDENT_ID"
 $env:LS_API_KEY="YOUR_LEGACYSUPPLY_API_KEY"
 ```
