@@ -17,12 +17,14 @@ final class TianggeLifecycle {
     private final MarketplaceGateway marketplace;
     private final InventoryService inventoryService;
     private final ClientInstance instance;
+    private final TianggeStockSync stockSync;
     private volatile boolean synced;
 
-    TianggeLifecycle(MarketplaceGateway marketplace, InventoryService inventoryService, ClientInstance instance) {
+    TianggeLifecycle(MarketplaceGateway marketplace, InventoryService inventoryService, ClientInstance instance, TianggeStockSync stockSync) {
         this.marketplace = marketplace;
         this.inventoryService = inventoryService;
         this.instance = instance;
+        this.stockSync = stockSync;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -50,6 +52,7 @@ final class TianggeLifecycle {
     private void syncShop() {
         publishListings();
         publishStock();
+        stockSync.clear();
         synced = true;
     }
 
