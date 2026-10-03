@@ -16,14 +16,12 @@ final class TianggeStockSync {
     }
 
     void changed(StockChangedEvent event) {
-        if (TianggeOrderContext.active()) {
-            TianggePendingStock pending = repository.findById(event.productId())
-                    .orElseGet(() -> new TianggePendingStock(event.productId(), event.stock()));
-            pending.setAvailable(event.stock());
-            repository.save(pending);
-            return;
-        }
-        send(List.of(new TianggeStock(event.productId(), event.stock())));
+        TianggePendingStock pending = repository.findById(event.productId())
+                .orElseGet(() -> new TianggePendingStock(event.productId(), event.stock()));
+        pending.setAvailable(event.stock());
+        repository.save(pending);
+
+        if (!TianggeOrderContext.active()) flush();
     }
 
     void flush() {
