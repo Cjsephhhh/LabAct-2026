@@ -1,100 +1,159 @@
-# IT342 System Integration — Extending the Modular Monolith
+# IT342 System Integration — Lab 4: Tiangge Marketplace
 
-Spring Boot + React + Supabase PostgreSQL modular monolith.
+**Project:** LabAct-2026  
+**Branch:** `lab4-tiangge-marketplace`  
+**Module:** Tiangge Channel Integration  
+**Stack:** Spring Boot + React + Supabase PostgreSQL
 
-## Modules
+## Lab 4 Overview
+
+This lab extends the existing modular monolith so the Spring Boot application can run the shop **unattended** through the Tiangge Marketplace.
+
+The Spring Boot application is the only component that communicates with the external Tiangge Marketplace and LegacySupply services. Tiangge orders must go through the same existing Order and Inventory business logic used by the React application.
+
+### Main Lab 4 Goals
+
+1. Create a fresh client-instance UUID every time the application starts.
+2. Send the client instance ID with outbound Tiangge and LegacySupply requests.
+3. Send a Tiangge heartbeat every 30 seconds.
+4. Publish at least three marketplace listings using the existing LegacySupply SupplierSku mappings.
+5. Synchronize stock through domain events instead of a stock-sync timer.
+6. Poll the Tiangge order feed, remember the cursor, deduplicate events, and create real shop orders.
+7. Handle Tiangge cancellations using the existing cancellation and inventory-restock logic.
+8. Automatically reorder missing stock from LegacySupply.
+9. Persist the feed cursor and processed event IDs so a restart does not duplicate work.
+10. Keep the application running unattended for the required 10-minute test.
+
+## Current Lab 4 Progress
+
+### Task 1 — Client Instance
+
+Implemented on this branch:
+
+- `ClientInstance` generates a new UUID when Spring starts.
+- LegacySupply requests automatically include:
+  `X-Client-Instance: <startup UUID>`
+- The client ID is not regenerated for every request.
+- The implementation is isolated from the Order and Inventory modules.
+
+**Current commit:** `e4cd095ab242b113d59656ba51be102e77253ba1`
+
+> The Tiangge endpoint paths and request/response formats will be implemented from the official Tiangge lab manual rather than guessed.
+
+## Product / Supplier Mapping
+
+| Shop Product | LegacySupply SupplierSku | Pack Size |
+|---|---|---:|
+| P100 Wireless Mouse | YQP-1135 | 24 |
+| P200 Mechanical Keyboard | YQP-4388 | 20 |
+| P300 USB-C Hub | YQP-6798 | 12 |
+
+These mappings are used when the application creates supplier purchase orders and resolves stock backorders.
+
+## Architecture
+
+The application keeps the existing modular-monolith structure:
+
 - `edu.cit.alvarado.shop` — Order module
 - `edu.cit.alvarado.inventory` — Inventory module
-- `edu.cit.alvarado.notification` — Notification module
+- `edu.cit.alvarado.supplier` — LegacySupply adapter
+- `edu.cit.alvarado.channel` — Tiangge/channel integration
 
-## Features
-- Multi-item orders with all-or-nothing transactional reservation.
-- Order cancellation with inventory restock.
-- `GET /api/inventory` and `GET /api/orders`.
-- Spring application events for confirmed/rejected orders.
-- Low-stock `Order needed` notifications.
-- Package-private `InventoryServiceImpl`.
+The channel module should expose only its public integration contract and domain types. HTTP clients, feed polling, JSON/transport classes, and translators should remain package-private.
 
-## Database
-Run `supabase.sql` in Supabase SQL Editor. It recreates `inventory`, `orders`, `order_items`, and `notifications` and seeds P100/P200/P300.
+The Order and Inventory modules must **not depend on Tiangge**. Tiangge orders enter through the channel module and are then passed into the existing Order/Inventory business rules.
 
-## Environment
-Never commit the real database password. Set these in the terminal:
+## Environment Variables
+
+Never commit real credentials or API keys.
+
+Existing database configuration:
+
 ```powershell
 $env:SUPABASE_DB_URL="jdbc:postgresql://YOUR_POOLER_HOST:5432/postgres?sslmode=require"
 $env:SUPABASE_DB_USERNAME="postgres.YOUR_PROJECT_REF"
 $env:SUPABASE_DB_PASSWORD="YOUR_DATABASE_PASSWORD"
 ```
 
-## Run
+LegacySupply:
+
+```powershell
+$env:LEGACY_SUPPLY_BASE_URL="https://legacysupply.onrender.com/api/v1"
+```
+
+Tiangge API credentials/configuration should also be supplied through environment variables. The actual variable names must match the Tiangge lab manual.
+
+## Running the Project
+
 Backend:
+
 ```powershell
 cd backend
 mvn spring-boot:run
 ```
-Frontend in a second terminal:
+
+Frontend:
+
 ```powershell
 cd frontend
 npm install
 npm run dev
 ```
 
-## API
-`POST /api/orders`
-```json
-{"items":[{"productId":"P100","quantity":2},{"productId":"P200","quantity":1}]}
-```
-`POST /api/orders/{orderId}/cancel`
-`GET /api/inventory`
-`GET /api/orders`
-`GET /api/notifications`
+For the unattended Lab 4 test, the Spring Boot backend must stay running continuously.
 
-## Atomicity
-Order validates every requested item before changing stock. The surrounding Spring `@Transactional` boundary covers the reservation loop and order persistence, while inventory rows are pessimistically locked. If Order and Inventory became microservices, a saga or compensating transaction approach would be needed because one local transaction could no longer span both services.
+## Lab 4 Testing Checklist
 
-## Event-driven notification
-Order publishes `OrderPlacedEvent` and `OrderRejectedEvent` using `ApplicationEventPublisher`; Notification listens with `@EventListener` and never calls OrderService or InventoryService. Inventory publishes `LowStockEvent` after a successful reservation crosses the threshold. If Notification became a microservice, a broker, retries, idempotency, dead-letter handling, and event schema/versioning would become relevant.
+Before final submission, verify:
 
-## Reflection
-Inventory is a reasonable first extraction candidate because it has a clear service contract and owns inventory state. Extraction would replace the in-process interface call with a network API or message contract, move Inventory to its own deployable application, establish database ownership, and add authentication, timeouts, retries, observability, and distributed consistency handling.
+- [ ] Application generates a new client UUID after every restart.
+- [ ] Tiangge requests contain the same UUID during one run.
+- [ ] LegacySupply requests contain the same UUID during one run.
+- [ ] Heartbeat is sent every 30 seconds.
+- [ ] Three Tiangge listings are published with the correct SupplierSku values.
+- [ ] A stock change reaches Tiangge through an event-driven flow.
+- [ ] Tiangge orders become real Order-module orders.
+- [ ] Accepted, rejected, and backordered cases are handled.
+- [ ] Multi-item orders are all-or-nothing.
+- [ ] Duplicate feed events do not create duplicate orders.
+- [ ] Feed cursor survives application restart.
+- [ ] Processed event IDs survive application restart.
+- [ ] Tiangge cancellation restocks inventory.
+- [ ] Cancellation confirmation is sent back to Tiangge.
+- [ ] LegacySupply reorder is created when stock is needed.
+- [ ] Backorders resolve after supplier delivery.
+- [ ] The application completes the required 10-minute hands-off test.
 
-## Evidence checklist
-Capture Network-tab evidence for a successful multi-item order, rejected multi-item order with no partial reservation, cancellation/restock, notification activity, and low-stock alert. Put screenshots in `docs/`.
+## Evidence
 
+Keep screenshots/logs showing:
 
+1. Client instance UUID and outbound headers.
+2. Tiangge heartbeat.
+3. Published listings.
+4. Stock synchronization.
+5. Accepted/rejected/backordered Tiangge orders.
+6. Cancellation and restock.
+7. LegacySupply reorder and delivery.
+8. Restart with the same feed cursor and no duplicate processing.
+9. The final 10-minute unattended run.
 
+Put final reflection answers in `REFLECTION.md` as required by the lab instructions.
 
+## Previous Modular Monolith Features
 
-# Reflection
+The project still contains the original modular-monolith functionality:
 
-## 1. Unexpected StatusCode 90
+- Multi-item orders with all-or-nothing transactional reservation.
+- Order cancellation with inventory restock.
+- Inventory and order REST endpoints.
+- Spring application events.
+- Low-stock notifications.
+- Package-private Inventory implementation.
+- Supabase PostgreSQL persistence.
 
-PO-100217 with BuyerRef `LAB3-TEST-003` returned StatusCode 90, which was
-not included in the documented LegacySupply status codes. I treated this
-as an unexpected terminal status because the order did not represent a
-normal Accepted, Picking, Shipped, or Delivered state. My system should
-not assume that an unknown status means Delivered, so the adapter will
-map it to an `UNKNOWN` or failure-related status in our own enum and keep
-the order from adding stock. This prevents inventory from being increased
-when the supplier did not actually deliver the expected items.
+## Important Rule
 
-## 2. LegacySupply Session Lifetime
+**Do not put Tiangge API calls inside React, OrderService, or InventoryService.**
 
-LegacySupply does not provide the exact session lifetime, so I measured
-it by recording when a session was issued and when an authenticated
-request using that session returned `E-AUTH-07`. The measured session
-lifetime was **[ENTER YOUR ACTUAL SESSION LIFETIME]**. My adapter will
-keep the session internally and use it for authenticated requests until
-LegacySupply rejects it as expired. When an expired session is detected,
-the adapter will obtain a new session and retry the same operation using
-the same `X-Request-Id`.
-
-## 3. PackSize, Qty, and Delivered Units
-
-For my Wireless Mouse order `PO-100054`, LegacySupply returned `Qty = 1`
-and `Uom = CS`, while the catalog showed a PackSize of 24. Therefore,
-1 case × 24 units per case = 24 individual units delivered. If the
-Inventory module needs 25 individual units, the adapter must round
-25 ÷ 24 = 1.0417 cases up to 2 cases. The supplier request would therefore
-send `Qty = 2`, resulting in 2 × 24 = 48 individual units when delivered.
-
+All external Tiangge and LegacySupply communication belongs in the backend integration layer so the application can continue processing marketplace activity even when nobody has the frontend open.
