@@ -1,5 +1,6 @@
 package edu.cit.alvarado.supplier.adapter;
 
+import edu.cit.alvarado.channel.ClientInstance;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -10,6 +11,12 @@ import java.time.Duration;
 
 @Configuration
 class LegacySupplyConfig {
+
+    private final ClientInstance clientInstance;
+
+    LegacySupplyConfig(ClientInstance clientInstance) {
+        this.clientInstance = clientInstance;
+    }
 
     @Bean
     RestClient legacySupplyRestClient() {
@@ -32,6 +39,10 @@ class LegacySupplyConfig {
         return RestClient.builder()
                 .baseUrl(baseUrl)
                 .requestFactory(requestFactory)
+                .requestInterceptor((request, body, execution) -> {
+                    request.getHeaders().set("X-Client-Instance", clientInstance.id());
+                    return execution.execute(request, body);
+                })
                 .build();
     }
 }
