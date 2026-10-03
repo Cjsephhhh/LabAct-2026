@@ -23,13 +23,14 @@ final class TianggeFeedPoller {
     private final SupplierOrderService supplierOrderService;
     private final edu.cit.alvarado.inventory.InventoryService inventoryService;
     private final MarketplaceGateway marketplace;
+    private final TianggeStockSync stockSync;
 
     TianggeFeedPoller(TianggeClient client, TianggeStateRepository stateRepository,
                       TianggeProcessedEventRepository processedRepository,
                       TianggeOrderLinkRepository linkRepository, OrderService orderService,
                       SupplierOrderService supplierOrderService,
                       edu.cit.alvarado.inventory.InventoryService inventoryService,
-                      MarketplaceGateway marketplace) {
+                      MarketplaceGateway marketplace, TianggeStockSync stockSync) {
         this.client = client;
         this.stateRepository = stateRepository;
         this.processedRepository = processedRepository;
@@ -38,6 +39,7 @@ final class TianggeFeedPoller {
         this.supplierOrderService = supplierOrderService;
         this.inventoryService = inventoryService;
         this.marketplace = marketplace;
+        this.stockSync = stockSync;
     }
 
     @Scheduled(fixedDelay = 3000)
@@ -76,46 +78,55 @@ final class TianggeFeedPoller {
     }
 
     private void processOrder(TianggeClient.TianggeEvent event) {
-        var existing = linkRepository.findByTianggeOrderId(event.orderId);
-        if (existing.isPresent()) {
-            if ("ACCEPTED".equals(existing.get().getDecision())) marketplace.decide(event.orderId, TianggeDecision.accepted(String.valueOf(existing.get().getShopOrderId())));
-            else if ("REJECTED".equals(existing.get().getDecision())) marketplace.decide(event.orderId, TianggeDecision.rejected(String.valueOf(existing.get().getShopOrderId()), "Order already processed."));
-            else if ("BACKORDERED".equals(existing.get().getDecision())) marketplace.decide(event.orderId, TianggeDecision.backordered(String.valueOf(existing.get().getShopOrderId()), "Waiting for supplier stock."));
-            return;
-        }
-
-        List<OrderRequest.Item> items = new ArrayList<>();
-        List<OrderRequest.Item> missing = new ArrayList<>();
-
-        for (TianggeClient.TianggeLine line : event.lines) {
-            OrderRequest.Item item = new OrderRequest.Item(line.sellerSku, line.qty);
-            items.add(item);
-            try {
-                if (inventoryService.get(line.sellerSku).getStock() < line.qty) missing.add(item);
-            } catch (IllegalArgumentException ex) {
-                decideRejected(event.orderId, items, ex.getMessage());
+        TianggeOrderContext.begin();
+        try {
+            var existing = linkRepository.findByTianggeOrderId(event.orderId);
+            if (existing.isPresent()) {
+                if ("ACCEPTED".equals(existing.get().getDecision())) marketplace.decide(event.orderId, TianggeDecision.accepted(String.valueOf(existing.get().getShopOrderId())));
+                else if ("REJECTED".equals(existing.get().getDecision())) marketplace.decide(event.orderId, TianggeDecision.rejected(String.valueOf(existing.get().getShopOrderId()), "Order already processed."));
+                else if ("BACKORDERED".equals(existing.get().getDecision())) marketplace.decide(event.orderId, TianggeDecision.backordered(String.valueOf(existing.get().getShopOrderId()), "Waiting for supplier stock."));
+                stockSync.flush();
                 return;
             }
-        }
 
-        OrderRequest request = new OrderRequest(items);
-        if (missing.isEmpty()) {
-            OrderResponse response = orderService.placeOrder(request);
-            String decision = "CONFIRMED".equals(response.status()) ? "ACCEPTED" : "REJECTED";
-            linkRepository.save(new TianggeOrderLink(event.orderId, response.orderId(), decision));
-            if ("ACCEPTED".equals(decision)) {
-                marketplace.decide(event.orderId, TianggeDecision.accepted(String.valueOf(response.orderId())));
-            } else {
-                marketplace.decide(event.orderId, TianggeDecision.rejected(String.valueOf(response.orderId()), response.reason()));
+            List<OrderRequest.Item> items = new ArrayList<>();
+            List<OrderRequest.Item> missing = new ArrayList<>();
+
+            for (TianggeClient.TianggeLine line : event.lines) {
+                OrderRequest.Item item = new OrderRequest.Item(line.sellerSku, line.qty);
+                items.add(item);
+                try {
+                    if (inventoryService.get(line.sellerSku).getStock() < line.qty) missing.add(item);
+                } catch (IllegalArgumentException ex) {
+                    decideRejected(event.orderId, items, ex.getMessage());
+                    stockSync.flush();
+                    return;
+                }
             }
-            return;
+
+            OrderRequest request = new OrderRequest(items);
+            if (missing.isEmpty()) {
+                OrderResponse response = orderService.placeOrder(request);
+                String decision = "CONFIRMED".equals(response.status()) ? "ACCEPTED" : "REJECTED";
+                linkRepository.save(new TianggeOrderLink(event.orderId, response.orderId(), decision));
+                if ("ACCEPTED".equals(decision)) {
+                    marketplace.decide(event.orderId, TianggeDecision.accepted(String.valueOf(response.orderId())));
+                } else {
+                    marketplace.decide(event.orderId, TianggeDecision.rejected(String.valueOf(response.orderId()), response.reason()));
+                }
+                stockSync.flush();
+                return;
+            }
+
+            for (OrderRequest.Item item : missing) supplierOrderService.placeReorder(item.productId(), item.quantity());
+
+            OrderResponse response = orderService.createBackorder(request);
+            linkRepository.save(new TianggeOrderLink(event.orderId, response.orderId(), "BACKORDERED"));
+            marketplace.decide(event.orderId, TianggeDecision.backordered(String.valueOf(response.orderId()), "Waiting for supplier stock."));
+            stockSync.flush();
+        } finally {
+            TianggeOrderContext.end();
         }
-
-        for (OrderRequest.Item item : missing) supplierOrderService.placeReorder(item.productId(), item.quantity());
-
-        OrderResponse response = orderService.createBackorder(request);
-        linkRepository.save(new TianggeOrderLink(event.orderId, response.orderId(), "BACKORDERED"));
-        marketplace.decide(event.orderId, TianggeDecision.backordered(String.valueOf(response.orderId()), "Waiting for supplier stock."));
     }
 
     private void decideRejected(String orderId, List<OrderRequest.Item> items, String reason) {
@@ -125,12 +136,22 @@ final class TianggeFeedPoller {
     }
 
     private void processCancellation(TianggeClient.TianggeEvent event) {
-        TianggeOrderLink link = linkRepository.findByTianggeOrderId(event.orderId)
-                .orElseThrow(() -> new IllegalStateException("No local order for " + event.orderId));
-        boolean restocked = "ACCEPTED".equals(link.getDecision());
-        orderService.cancelOrder(link.getShopOrderId());
-        link.setDecision("CANCELLED");
-        linkRepository.save(link);
-        marketplace.confirmCancellation(event.orderId, restocked);
+        TianggeOrderContext.begin();
+        try {
+            TianggeOrderLink link = linkRepository.findByTianggeOrderId(event.orderId)
+                    .orElseThrow(() -> new IllegalStateException("No local order for " + event.orderId));
+            boolean restocked = link.isRestocked();
+            if (!"CANCELLED".equals(link.getDecision())) {
+                restocked = "ACCEPTED".equals(link.getDecision());
+                orderService.cancelOrder(link.getShopOrderId());
+                link.setDecision("CANCELLED");
+                link.setRestocked(restocked);
+                linkRepository.save(link);
+            }
+            marketplace.confirmCancellation(event.orderId, restocked);
+            stockSync.flush();
+        } finally {
+            TianggeOrderContext.end();
+        }
     }
 }
