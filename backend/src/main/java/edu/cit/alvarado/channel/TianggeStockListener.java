@@ -7,17 +7,14 @@ import org.springframework.transaction.event.TransactionalEventListener;
 
 @Component
 final class TianggeStockListener {
-    private final MarketplaceGateway marketplace;
+    private final TianggeStockSync stockSync;
 
-    TianggeStockListener(MarketplaceGateway marketplace) {
-        this.marketplace = marketplace;
+    TianggeStockListener(TianggeStockSync stockSync) {
+        this.stockSync = stockSync;
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    void stockChanged(StockChangedEvent event) {
-        try {
-            marketplace.publishStock(java.util.List.of(new TianggeStock(event.productId(), event.stock())));
-        } catch (RuntimeException ignored) {
-        }
+    public void stockChanged(StockChangedEvent event) {
+        stockSync.changed(event);
     }
 }
