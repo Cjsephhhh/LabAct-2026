@@ -71,7 +71,8 @@ final class TianggeBackorderListener {
                 });
             } catch (RuntimeException exception) {
                 System.out.println("Tiangge backorder retry failed for "
-                        + link.getTianggeOrderId() + ": " + exception.getMessage());
+                        + link.getTianggeOrderId());
+                exception.printStackTrace();
             }
         }
     }
