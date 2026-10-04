@@ -10,6 +10,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.util.List;
+
 @Component
 final class TianggeBackorderListener {
     private final TianggeOrderLinkRepository links;
@@ -44,7 +46,14 @@ final class TianggeBackorderListener {
     }
 
     private void resolveOpenBackorders() {
-        for (TianggeOrderLink link : links.findByDecision("BACKORDERED")) {
+        List<TianggeOrderLink> openBackorders =
+                transactionTemplate.execute(status -> links.findByDecision("BACKORDERED"));
+
+        if (openBackorders == null) {
+            return;
+        }
+
+        for (TianggeOrderLink link : openBackorders) {
             try {
                 transactionTemplate.executeWithoutResult(status -> {
                     TianggeOrderContext.begin();
