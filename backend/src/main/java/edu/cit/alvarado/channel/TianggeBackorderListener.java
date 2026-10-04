@@ -1,5 +1,6 @@
 package edu.cit.alvarado.channel;
 
+import edu.cit.alvarado.inventory.InventoryService;
 import edu.cit.alvarado.shop.OrderResponse;
 import edu.cit.alvarado.shop.OrderService;
 import edu.cit.alvarado.supplier.SupplierOrderDeliveredEvent;
@@ -15,17 +16,20 @@ final class TianggeBackorderListener {
     private final OrderService orderService;
     private final MarketplaceGateway marketplace;
     private final TianggeStockSync stockSync;
+    private final InventoryService inventoryService;
 
-    TianggeBackorderListener(TianggeOrderLinkRepository links, OrderService orderService, MarketplaceGateway marketplace, TianggeStockSync stockSync) {
+    TianggeBackorderListener(TianggeOrderLinkRepository links, OrderService orderService, MarketplaceGateway marketplace, TianggeStockSync stockSync, InventoryService inventoryService) {
         this.links = links;
         this.orderService = orderService;
         this.marketplace = marketplace;
         this.stockSync = stockSync;
+        this.inventoryService = inventoryService;
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Order(10)
     void deliveryArrived(SupplierOrderDeliveredEvent event) {
+        inventoryService.restock(event.productId(), event.units());
         resolveOpenBackorders();
     }
 
@@ -45,7 +49,9 @@ final class TianggeBackorderListener {
                     marketplace.resolve(link.getTianggeOrderId(), "ACCEPTED");
                     stockSync.flush();
                 }
-            } catch (RuntimeException ignored) {
+            } catch (RuntimeException exception) {
+                System.out.println("Tiangge backorder retry failed for "
+                        + link.getTianggeOrderId() + ": " + exception.getMessage());
             } finally {
                 TianggeOrderContext.end();
             }
