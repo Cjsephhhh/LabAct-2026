@@ -14,7 +14,7 @@ public class SupplierDeliveryListener {
         this.inventoryService = inventoryService;
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     @Order(0)
     public void handleSupplierDelivery(SupplierOrderDeliveredEvent event) {
         inventoryService.restock(event.productId(), event.units());
