@@ -164,8 +164,8 @@ final class TianggeFeedPoller {
                 link.setRestocked(restocked);
                 linkRepository.save(link);
             }
-            marketplace.confirmCancellation(event.orderId, restocked);
             stockSync.flush();
+            marketplace.confirmCancellation(event.orderId, restocked);
         } finally {
             TianggeOrderContext.end();
         }
