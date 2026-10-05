@@ -16,8 +16,11 @@ final class TianggeClient implements MarketplaceGateway {
     private final RestClient client;
     private final java.time.OffsetDateTime instanceStartedAt;
 
+    private final String instanceId;
+    
     TianggeClient(ClientInstance instance) {
         this.instanceStartedAt = instance.startedAt();
+        this.instanceId = instance.id();
         HttpClient httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(3))
                 .build();
@@ -43,8 +46,17 @@ final class TianggeClient implements MarketplaceGateway {
     @Override
     public void heartbeat(long uptimeSeconds) {
         retry(() -> client.post().uri("/instances/heartbeat")
-                .body(new HeartbeatBody("lab4-shop", instanceStartedAt.toString(), uptimeSeconds))
+                .body(new HeartbeatBody(
+                        instanceId(),
+                        "lab4-shop",
+                        instanceStartedAt.toString(),
+                        uptimeSeconds
+                ))
                 .retrieve().toBodilessEntity());
+    }
+
+    private String instanceId() {
+        return instanceId;
     }
 
     @Override
@@ -113,7 +125,7 @@ final class TianggeClient implements MarketplaceGateway {
         return value;
     }
 
-    record HeartbeatBody(String appName, String startedAt, long uptimeSeconds) {}
+    record HeartbeatBody(String id, String appName, String startedAt, long uptimeSeconds) {}
     record ResolutionBody(String status) {}
     record CancellationBody(boolean restocked) {}
     static class TianggeFeed {
