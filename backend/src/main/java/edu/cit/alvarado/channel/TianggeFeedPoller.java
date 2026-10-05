@@ -120,7 +120,21 @@ final class TianggeFeedPoller {
                 return;
             }
 
-            for (OrderRequest.Item item : missing) supplierOrderService.placeReorder(item.productId(), item.quantity());
+            boolean supplierReady = true;
+            for (OrderRequest.Item item : missing) {
+                var supplierOrder = supplierOrderService.placeReorder(item.productId(), item.quantity());
+                if (supplierOrder.getPoNumber() == null
+                        || supplierOrder.getPoNumber().isBlank()
+                        || supplierOrder.getStatus() == edu.cit.alvarado.supplier.SupplierOrderStatus.PENDING) {
+                    supplierReady = false;
+                }
+            }
+
+            if (!supplierReady) {
+                decideRejected(event.orderId, items, "Supplier purchase order is not open.");
+                stockSync.flush();
+                return;
+            }
 
             OrderResponse response = orderService.createBackorder(request);
             linkRepository.save(new TianggeOrderLink(event.orderId, response.orderId(), "BACKORDERED"));
