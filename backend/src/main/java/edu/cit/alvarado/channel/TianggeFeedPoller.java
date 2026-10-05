@@ -53,7 +53,7 @@ final class TianggeFeedPoller {
                 saveProgress(event);
             }
             if (feed.events.isEmpty() && feed.nextCursor > cursor) {
-                state.setCursor(feed.nextCursor);
+                state.setCursor(Math.max(state.getCursor(), feed.nextCursor));
                 stateRepository.save(state);
             }
         } catch (RuntimeException ex) {
@@ -66,8 +66,10 @@ final class TianggeFeedPoller {
             processedRepository.save(new TianggeProcessedEvent(event.eventId, event.seq));
         }
         TianggeState state = stateRepository.findById(1L).orElseGet(() -> new TianggeState(1L, 0L));
-        state.setCursor(event.seq);
-        stateRepository.save(state);
+        if (event.seq > state.getCursor()) {
+            state.setCursor(event.seq);
+            stateRepository.save(state);
+        }
     }
 
     private void processEvent(TianggeClient.TianggeEvent event) {
