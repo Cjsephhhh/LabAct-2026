@@ -111,12 +111,12 @@ final class TianggeFeedPoller {
                 OrderResponse response = orderService.placeOrder(request);
                 String decision = "CONFIRMED".equals(response.status()) ? "ACCEPTED" : "REJECTED";
                 linkRepository.save(new TianggeOrderLink(event.orderId, response.orderId(), decision));
+                stockSync.flush();
                 if ("ACCEPTED".equals(decision)) {
                     marketplace.decide(event.orderId, TianggeDecision.accepted(String.valueOf(response.orderId())));
                 } else {
                     marketplace.decide(event.orderId, TianggeDecision.rejected(String.valueOf(response.orderId()), response.reason()));
                 }
-                stockSync.flush();
                 return;
             }
 
